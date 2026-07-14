@@ -1,0 +1,41 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDiscoverSkillsDirectChildrenOnly(t *testing.T) {
+	root := t.TempDir()
+	createSkill(t, root, "alpha")
+	createSkill(t, root, "beta")
+	if err := os.MkdirAll(filepath.Join(root, "nested", "gamma"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "nested", "gamma", "SKILL.md"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	inventory, err := DiscoverSkills(root)
+	if err != nil {
+		t.Fatalf("DiscoverSkills() error = %v", err)
+	}
+	if len(inventory.Skills) != 2 {
+		t.Fatalf("len(Skills) = %d, want 2", len(inventory.Skills))
+	}
+	if inventory.Skills[0].Name != "alpha" || inventory.Skills[1].Name != "beta" {
+		t.Fatalf("skills = %#v", inventory.Skills)
+	}
+}
+
+func createSkill(t *testing.T, root, name string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: test\ndescription: test\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
