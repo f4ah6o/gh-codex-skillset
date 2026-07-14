@@ -1,26 +1,35 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-
-	"github.com/cli/go-gh/v2/pkg/api"
+	"os"
+	"runtime/debug"
 )
 
+var version = "dev"
+
 func main() {
-	fmt.Println("hi world, this is the gh-codex-skillset extension!")
-	client, err := api.DefaultRESTClient()
-	if err != nil {
-		fmt.Println(err)
-		return
+	app := NewApp(os.Stdin, os.Stdout, os.Stderr)
+	if err := app.Run(os.Args[1:]); err != nil {
+		var exitErr *ExitError
+		if errors.As(err, &exitErr) {
+			if !exitErr.Silent && exitErr.Err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", exitErr.Err)
+			}
+			os.Exit(exitErr.Code)
+		}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
-	response := struct {Login string}{}
-	err = client.Get("user", &response)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("running as %s\n", response.Login)
 }
 
-// For more examples of using go-gh, see:
-// https://github.com/cli/go-gh/blob/trunk/example_gh_test.go
+func currentVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
