@@ -34,3 +34,15 @@ func TestBuildCodexArgsWithoutUserSkills(t *testing.T) {
 		t.Fatalf("BuildCodexArgs() = %#v, want %#v", got, want)
 	}
 }
+
+func TestBuildCodexOverrideSortsSameNamedSkillsByPath(t *testing.T) {
+	skills := []Skill{
+		{Name: "shared", File: "/home/me/z/SKILL.md"},
+		{Name: "shared", File: "/home/me/a/SKILL.md"},
+	}
+	got := BuildCodexOverride(skills, map[string]bool{"shared": true})
+	want := `skills.config=[{path="/home/me/a/SKILL.md",enabled=false},{path="/home/me/z/SKILL.md",enabled=false}]`
+	if got != want {
+		t.Fatalf("BuildCodexOverride() = %q, want %q", got, want)
+	}
+}

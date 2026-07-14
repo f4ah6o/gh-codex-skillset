@@ -13,7 +13,12 @@ func BuildCodexOverride(skills []Skill, disabled map[string]bool) string {
 		return ""
 	}
 	skills = append([]Skill(nil), skills...)
-	sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
+	sort.Slice(skills, func(i, j int) bool {
+		if skills[i].Name != skills[j].Name {
+			return skills[i].Name < skills[j].Name
+		}
+		return skills[i].File < skills[j].File
+	})
 	var b strings.Builder
 	b.WriteString("skills.config=[")
 	for i, skill := range skills {

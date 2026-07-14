@@ -97,7 +97,43 @@ func DiscoverSkills(root string) (Inventory, error) {
 		})
 	}
 	sort.Slice(inventory.Skills, func(a, b int) bool {
-		return inventory.Skills[a].Name < inventory.Skills[b].Name
+		if inventory.Skills[a].Name != inventory.Skills[b].Name {
+			return inventory.Skills[a].Name < inventory.Skills[b].Name
+		}
+		return inventory.Skills[a].File < inventory.Skills[b].File
+	})
+	sort.Strings(inventory.Problems)
+	return inventory, nil
+}
+
+// DiscoverSkillsInRoots discovers direct-child skills from multiple user
+// scope roots. The canonical file path is used to avoid reporting the same
+// symlinked skill more than once, while different files with the same name
+// remain separate inventory entries.
+func DiscoverSkillsInRoots(roots []string) (Inventory, error) {
+	inventory := Inventory{}
+	seenFiles := make(map[string]bool)
+
+	for _, root := range roots {
+		discovered, err := DiscoverSkills(root)
+		if err != nil {
+			return Inventory{}, err
+		}
+		inventory.Problems = append(inventory.Problems, discovered.Problems...)
+		for _, skill := range discovered.Skills {
+			if seenFiles[skill.File] {
+				continue
+			}
+			seenFiles[skill.File] = true
+			inventory.Skills = append(inventory.Skills, skill)
+		}
+	}
+
+	sort.Slice(inventory.Skills, func(a, b int) bool {
+		if inventory.Skills[a].Name != inventory.Skills[b].Name {
+			return inventory.Skills[a].Name < inventory.Skills[b].Name
+		}
+		return inventory.Skills[a].File < inventory.Skills[b].File
 	})
 	sort.Strings(inventory.Problems)
 	return inventory, nil

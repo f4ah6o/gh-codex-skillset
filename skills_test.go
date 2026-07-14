@@ -29,6 +29,44 @@ func TestDiscoverSkillsDirectChildrenOnly(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkillsInRootsKeepsDistinctSameNamedSkills(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	createSkill(t, first, "shared")
+	createSkill(t, second, "shared")
+
+	inventory, err := DiscoverSkillsInRoots([]string{first, second})
+	if err != nil {
+		t.Fatalf("DiscoverSkillsInRoots() error = %v", err)
+	}
+	if len(inventory.Skills) != 2 {
+		t.Fatalf("len(Skills) = %d, want 2: %#v", len(inventory.Skills), inventory.Skills)
+	}
+	if inventory.Skills[0].Name != "shared" || inventory.Skills[1].Name != "shared" {
+		t.Fatalf("skills = %#v, want two shared skills", inventory.Skills)
+	}
+	if inventory.Skills[0].File >= inventory.Skills[1].File {
+		t.Fatalf("skills are not sorted by canonical path: %#v", inventory.Skills)
+	}
+}
+
+func TestDiscoverSkillsInRootsDeduplicatesSameCanonicalSkill(t *testing.T) {
+	root := t.TempDir()
+	aliasRoot := t.TempDir()
+	createSkill(t, root, "shared")
+	if err := os.Symlink(filepath.Join(root, "shared"), filepath.Join(aliasRoot, "shared")); err != nil {
+		t.Fatal(err)
+	}
+
+	inventory, err := DiscoverSkillsInRoots([]string{root, aliasRoot})
+	if err != nil {
+		t.Fatalf("DiscoverSkillsInRoots() error = %v", err)
+	}
+	if len(inventory.Skills) != 1 {
+		t.Fatalf("len(Skills) = %d, want 1: %#v", len(inventory.Skills), inventory.Skills)
+	}
+}
+
 func createSkill(t *testing.T, root, name string) {
 	t.Helper()
 	dir := filepath.Join(root, name)

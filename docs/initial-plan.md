@@ -102,26 +102,29 @@ Skill の有効・無効状態は、Git リポジトリ内に保存する。
 
 ### 7.1 標準探索ディレクトリ
 
-User scope Skill は、次のディレクトリから探索する。
+User scope Skill は、次の2つのディレクトリから探索する。
 
 ````text
-~/.agents/skills
+$CODEX_HOME/skills
+$HOME/.agents/skills
 ````
+
+`CODEX_HOME` が未設定の場合は `$HOME/.codex` を使用する。`CODEX_HOME` が設定されている場合、デフォルトの `$HOME/.codex` は追加で探索しない。
 
 ### 7.2 Skill の判定条件
 
-次のパスに `SKILL.md` が存在する場合、そのディレクトリを Skill として扱う。
+上記いずれかのルート直下に `SKILL.md` が存在する場合、そのディレクトリを Skill として扱う。
 
 ````text
-~/.agents/skills/<skill-name>/SKILL.md
+<skill-root>/<skill-name>/SKILL.md
 ````
 
 例:
 
 ````text
-~/.agents/skills/advisor-pattern/SKILL.md
-~/.agents/skills/pdfs/SKILL.md
-~/.agents/skills/slides/SKILL.md
+$CODEX_HOME/skills/advisor-pattern/SKILL.md
+$CODEX_HOME/skills/pdfs/SKILL.md
+$HOME/.agents/skills/slides/SKILL.md
 ````
 
 この場合、Skill 名はそれぞれ次のとおりとする。
@@ -139,8 +142,10 @@ slides
 次のような多階層構造は対象外とする。
 
 ````text
-~/.agents/skills/category/example/SKILL.md
+<skill-root>/category/example/SKILL.md
 ````
+
+同じ Skill 名でも異なる物理パスにある場合は、一覧と Codex の一時設定では別エントリとして扱う。ただし、リポジトリ設定の `disabled` は名前単位のため、有効・無効状態は共有する。
 
 ### 7.4 シンボリックリンク
 

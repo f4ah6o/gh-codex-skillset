@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ func TestDisableThenRunDryRun(t *testing.T) {
 	app := NewApp(strings.NewReader(""), &stdout, &stderr)
 	app.Getwd = func() (string, error) { return repo, nil }
 	app.UserHome = func() (string, error) { return home, nil }
+	app.Getenv = func(string) string { return "" }
 
 	if err := app.Run([]string{"disable", "slides", "pdfs"}); err != nil {
 		t.Fatalf("disable error = %v", err)
@@ -56,6 +58,7 @@ func TestSetEnabledIsAtomicOnMissingSkill(t *testing.T) {
 	app := NewApp(strings.NewReader(""), &stdout, &bytes.Buffer{})
 	app.Getwd = func() (string, error) { return repo, nil }
 	app.UserHome = func() (string, error) { return home, nil }
+	app.Getenv = func(string) string { return "" }
 
 	err := app.Run([]string{"disable", "pdfs", "missing"})
 	if err == nil {
@@ -114,6 +117,7 @@ func TestRunPassesExplicitSkillStatesAndPropagatesExitCode(t *testing.T) {
 	app := NewApp(strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
 	app.Getwd = func() (string, error) { return repo, nil }
 	app.UserHome = func() (string, error) { return home, nil }
+	app.Getenv = func(string) string { return "" }
 	app.LookPath = func(name string) (string, error) { return "/usr/bin/codex", nil }
 	var gotArgs []string
 	app.RunCommand = func(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
@@ -135,5 +139,63 @@ func TestRunPassesExplicitSkillStatesAndPropagatesExitCode(t *testing.T) {
 	}
 	if !strings.Contains(joined, `slides/SKILL.md",enabled=false`) {
 		t.Fatalf("args do not disable slides: %#v", gotArgs)
+	}
+}
+
+func TestListDiscoversBothUserSkillRoots(t *testing.T) {
+	repo := initTestRepo(t)
+	home := t.TempDir()
+	createSkill(t, filepath.Join(home, ".codex", "skills"), "codex-skill")
+	createSkill(t, filepath.Join(home, ".agents", "skills"), "agents-skill")
+
+	var stdout bytes.Buffer
+	app := NewApp(strings.NewReader(""), &stdout, &bytes.Buffer{})
+	app.Getwd = func() (string, error) { return repo, nil }
+	app.UserHome = func() (string, error) { return home, nil }
+	app.Getenv = func(string) string { return "" }
+
+	if err := app.Run([]string{"list", "--json"}); err != nil {
+		t.Fatalf("list --json error = %v", err)
+	}
+	var rows []SkillStatus
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
+		t.Fatalf("decode list output: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want 2: %#v", len(rows), rows)
+	}
+	if rows[0].Name != "agents-skill" || rows[1].Name != "codex-skill" {
+		t.Fatalf("rows = %#v, want sorted names", rows)
+	}
+}
+
+func TestCustomCodexHomeReplacesDefaultCodexRoot(t *testing.T) {
+	repo := initTestRepo(t)
+	home := t.TempDir()
+	codexHome := t.TempDir()
+	createSkill(t, filepath.Join(codexHome, "skills"), "custom-skill")
+	createSkill(t, filepath.Join(home, ".codex", "skills"), "default-skill")
+	createSkill(t, filepath.Join(home, ".agents", "skills"), "agents-skill")
+
+	var stdout bytes.Buffer
+	app := NewApp(strings.NewReader(""), &stdout, &bytes.Buffer{})
+	app.Getwd = func() (string, error) { return repo, nil }
+	app.UserHome = func() (string, error) { return home, nil }
+	app.Getenv = func(name string) string {
+		if name == "CODEX_HOME" {
+			return codexHome
+		}
+		return ""
+	}
+
+	if err := app.Run([]string{"list", "--quiet"}); err != nil {
+		t.Fatalf("list --quiet error = %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "custom-skill\n") || !strings.Contains(output, "agents-skill\n") {
+		t.Fatalf("output = %q, want custom and agents skills", output)
+	}
+	if strings.Contains(output, "default-skill\n") {
+		t.Fatalf("output = %q, must not include default CODEX_HOME root", output)
 	}
 }

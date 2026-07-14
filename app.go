@@ -49,6 +49,7 @@ type App struct {
 
 	Getwd      func() (string, error)
 	UserHome   func() (string, error)
+	Getenv     func(string) string
 	LookPath   func(string) (string, error)
 	RunCommand func(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error)
 }
@@ -60,6 +61,7 @@ func NewApp(stdin io.Reader, stdout, stderr io.Writer) *App {
 		Stderr:   stderr,
 		Getwd:    os.Getwd,
 		UserHome: os.UserHomeDir,
+		Getenv:   os.Getenv,
 		LookPath: exec.LookPath,
 		RunCommand: func(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 			cmd := exec.Command(name, args...)
@@ -159,12 +161,46 @@ func (a *App) repoContext() (string, string, error) {
 	return root, filepath.Join(root, filepath.FromSlash(configRelativePath)), nil
 }
 
-func (a *App) skillsRoot() (string, error) {
+func (a *App) skillRoots() ([]string, error) {
 	home, err := a.UserHome()
 	if err != nil {
-		return "", skillError(fmt.Errorf("resolve home directory: %w", err))
+		return nil, fmt.Errorf("resolve home directory: %w", err)
 	}
-	return filepath.Join(home, ".agents", "skills"), nil
+
+	codexHome := ""
+	if a.Getenv != nil {
+		codexHome = a.Getenv("CODEX_HOME")
+	}
+	if codexHome == "" {
+		codexHome = filepath.Join(home, ".codex")
+	}
+
+	roots := []string{
+		filepath.Join(codexHome, "skills"),
+		filepath.Join(home, ".agents", "skills"),
+	}
+	result := make([]string, 0, len(roots))
+	seen := make(map[string]bool, len(roots))
+	for _, root := range roots {
+		absolute, err := filepath.Abs(root)
+		if err != nil {
+			return nil, fmt.Errorf("resolve skills directory %s: %w", root, err)
+		}
+		if seen[absolute] {
+			continue
+		}
+		seen[absolute] = true
+		result = append(result, absolute)
+	}
+	return result, nil
+}
+
+func (a *App) discoverSkills() (Inventory, error) {
+	roots, err := a.skillRoots()
+	if err != nil {
+		return Inventory{}, err
+	}
+	return DiscoverSkillsInRoots(roots)
 }
 
 func (a *App) runInit(args []string) error {
@@ -195,11 +231,7 @@ func (a *App) runInit(args []string) error {
 
 	cfg := DefaultConfig()
 	if *allDisabled {
-		skillsRoot, err := a.skillsRoot()
-		if err != nil {
-			return err
-		}
-		inventory, err := DiscoverSkills(skillsRoot)
+		inventory, err := a.discoverSkills()
 		if err != nil {
 			return skillError(err)
 		}
@@ -253,11 +285,7 @@ func (a *App) runList(args []string) error {
 		cfg = loaded
 	}
 
-	skillsRoot, err := a.skillsRoot()
-	if err != nil {
-		return err
-	}
-	inventory, err := DiscoverSkills(skillsRoot)
+	inventory, err := a.discoverSkills()
 	if err != nil {
 		return skillError(err)
 	}
@@ -323,11 +351,7 @@ func (a *App) runSetEnabled(args []string, enabled bool) error {
 	if err != nil {
 		return configError(err)
 	}
-	skillsRoot, err := a.skillsRoot()
-	if err != nil {
-		return err
-	}
-	inventory, err := DiscoverSkills(skillsRoot)
+	inventory, err := a.discoverSkills()
 	if err != nil {
 		return skillError(err)
 	}
@@ -401,11 +425,7 @@ func (a *App) runCodex(args []string) error {
 	if err != nil {
 		return configError(err)
 	}
-	skillsRoot, err := a.skillsRoot()
-	if err != nil {
-		return err
-	}
-	inventory, err := DiscoverSkills(skillsRoot)
+	inventory, err := a.discoverSkills()
 	if err != nil {
 		return skillError(err)
 	}

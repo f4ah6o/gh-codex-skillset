@@ -70,21 +70,23 @@ func (a *App) runDoctor(args []string) error {
 		}
 	}
 
-	skillsRoot, homeErr := a.skillsRoot()
+	skillsRoots, homeErr := a.skillRoots()
 	var inventory Inventory
 	if homeErr != nil {
 		report.add("ERROR", "skills", homeErr.Error())
 	} else {
-		if _, statErr := os.Stat(skillsRoot); statErr != nil {
-			if os.IsNotExist(statErr) {
-				report.add("WARN", "skills-root", fmt.Sprintf("not found: %s", skillsRoot))
+		for _, skillsRoot := range skillsRoots {
+			if _, statErr := os.Stat(skillsRoot); statErr != nil {
+				if os.IsNotExist(statErr) {
+					report.add("WARN", "skills-root", fmt.Sprintf("not found: %s", skillsRoot))
+				} else {
+					report.add("ERROR", "skills-root", statErr.Error())
+				}
 			} else {
-				report.add("ERROR", "skills-root", statErr.Error())
+				report.add("OK", "skills-root", skillsRoot)
 			}
-		} else {
-			report.add("OK", "skills-root", skillsRoot)
 		}
-		discovered, discoverErr := DiscoverSkills(skillsRoot)
+		discovered, discoverErr := DiscoverSkillsInRoots(skillsRoots)
 		if discoverErr != nil {
 			report.add("ERROR", "skills", discoverErr.Error())
 		} else {
